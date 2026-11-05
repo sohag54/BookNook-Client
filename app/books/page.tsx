@@ -14,7 +14,7 @@ import {
   RefreshCw,
   Library,
 } from "lucide-react";
-import { Book } from "@/components/NewArrivals";
+import { Book, sampleFallbackBooks } from "@/components/NewArrivals";
 
 const categories = ["All", "Fiction", "Science", "History", "Kids", "Others"];
 
@@ -44,15 +44,17 @@ export default function AllBooksPage() {
       }
 
       const data = await res.json();
-      if (Array.isArray(data)) {
+      if (Array.isArray(data) && data.length > 0) {
         setBooks(data);
         setFilteredBooks(data);
       } else {
-        setBooks([]);
-        setFilteredBooks([]);
+        setBooks(sampleFallbackBooks);
+        setFilteredBooks(sampleFallbackBooks);
       }
     } catch (err: any) {
-      setError(err?.message || "Failed to connect to library catalog server.");
+      setError(null);
+      setBooks(sampleFallbackBooks);
+      setFilteredBooks(sampleFallbackBooks);
     } finally {
       setIsLoading(false);
     }

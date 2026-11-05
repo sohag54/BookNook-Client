@@ -20,7 +20,7 @@ import {
   X,
   BookOpen,
 } from "lucide-react";
-import { Book } from "@/components/NewArrivals";
+import { Book, sampleFallbackBooks } from "@/components/NewArrivals";
 
 function BookDetailsContent() {
   const params = useParams();
@@ -60,6 +60,12 @@ function BookDetailsContent() {
       const res = await fetch(`${apiUrl}/books/${bookId}`);
 
       if (!res.ok) {
+        const fallback = sampleFallbackBooks.find((b) => b._id === bookId);
+        if (fallback) {
+          setBook(fallback);
+          document.title = `BookNook | ${fallback.title}`;
+          return;
+        }
         if (res.status === 404) {
           throw new Error("This book could not be found in our catalog.");
         }
@@ -72,7 +78,13 @@ function BookDetailsContent() {
         document.title = `BookNook | ${data.title}`;
       }
     } catch (err: any) {
-      setBookError(err?.message || "Failed to load book information.");
+      const fallback = sampleFallbackBooks.find((b) => b._id === bookId);
+      if (fallback) {
+        setBook(fallback);
+        document.title = `BookNook | ${fallback.title}`;
+      } else {
+        setBookError(err?.message || "Failed to load book information.");
+      }
     } finally {
       setIsLoadingBook(false);
     }

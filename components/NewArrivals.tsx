@@ -19,7 +19,7 @@ export interface Book {
 }
 
 // Sample fallback books to display if the database is initially empty
-const sampleFallbackBooks: Book[] = [
+export const sampleFallbackBooks: Book[] = [
   {
     _id: "sample-1",
     title: "To Kill a Mockingbird",
@@ -34,7 +34,7 @@ const sampleFallbackBooks: Book[] = [
     title: "A Brief History of Time",
     author: "Stephen Hawking",
     category: "Science",
-    image: "https://images.unsplash.com/photo-1532012164546-f432f2e3edd4?auto=format&fit=crop&w=600&q=80",
+    image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=600&q=80",
     description: "A landmark volume in science writing by one of the great minds of our time exploring black holes and space.",
     copies: 3,
   },
@@ -61,7 +61,7 @@ const sampleFallbackBooks: Book[] = [
     title: "Cosmos",
     author: "Carl Sagan",
     category: "Science",
-    image: "https://images.unsplash.com/photo-1507842229452-e4d0d00f6828?auto=format&fit=crop&w=600&q=80",
+    image: "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=600&q=80",
     description: "The story of fifteen billion years of cosmic evolution transforming matter and life into consciousness.",
     copies: 3,
   },
