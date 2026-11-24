@@ -2,7 +2,7 @@
 
 > A modern, responsive web application for book lovers to explore catalogs, add books, borrow titles, and track returns.
 
-- **Live Website**: [https://booknook-client.vercel.app](https://booknook-client.vercel.app) *(or your deployed production URL)*
+- **Live Website**: [https://book-nook-client-red.vercel.app/](https://book-nook-client-red.vercel.app/)
 - **Frontend Repository**: [https://github.com/sohag54/BookNook-Client](https://github.com/sohag54/BookNook-Client)
 - **Backend Repository**: [https://github.com/sohag54/BookNook-Server](https://github.com/sohag54/BookNook-Server)
 
