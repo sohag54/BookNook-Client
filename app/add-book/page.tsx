@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -19,6 +19,8 @@ import {
   Loader2,
   ArrowLeft,
   CheckCircle2,
+  Upload,
+  X,
 } from "lucide-react";
 
 const CATEGORIES = ["Fiction", "Science", "History", "Kids", "Others"];
@@ -32,17 +34,30 @@ export default function AddBookPage() {
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [category, setCategory] = useState("Fiction");
+  const [uploadMode, setUploadMode] = useState<"file" | "url">("file");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>("");
   const [image, setImage] = useState("");
   const [description, setDescription] = useState("");
   const [copies, setCopies] = useState("1");
 
   const [isLoading, setIsLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Dynamic Page Title
   useEffect(() => {
     document.title = "BookNook | Add Book";
   }, []);
+
+  // Revoke object URL on unmount or file change
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   // Private route protection
   useEffect(() => {
@@ -51,6 +66,50 @@ export default function AddBookPage() {
       router.push(`/login?callbackUrl=${encodeURIComponent("/add-book")}`);
     }
   }, [isPending, user, router]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate MIME type (JPEG, PNG, WebP)
+    const validMimeTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!validMimeTypes.includes(file.type)) {
+      const msg = "Invalid file type. Please select a JPEG, PNG, or WebP image.";
+      setFormError(msg);
+      toast.error(msg);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    // Validate size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      const msg = "Image file size exceeds the 5MB limit. Please choose a smaller image.";
+      setFormError(msg);
+      toast.error(msg);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (previewUrl && previewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    setSelectedFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl);
+  };
+
+  const handleRemoveFile = () => {
+    if (previewUrl && previewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setSelectedFile(null);
+    setPreviewUrl("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,11 +130,20 @@ export default function AddBookPage() {
       return;
     }
 
-    if (!image.trim()) {
-      const msg = "Book cover image URL is required.";
-      setFormError(msg);
-      toast.error(msg);
-      return;
+    if (uploadMode === "file") {
+      if (!selectedFile) {
+        const msg = "Please select a book cover image from your device.";
+        setFormError(msg);
+        toast.error(msg);
+        return;
+      }
+    } else {
+      if (!image.trim()) {
+        const msg = "Book cover image URL is required.";
+        setFormError(msg);
+        toast.error(msg);
+        return;
+      }
     }
 
     if (!description.trim()) {
@@ -96,18 +164,24 @@ export default function AddBookPage() {
     try {
       setIsLoading(true);
 
+      const formData = new FormData();
+      formData.append("title", title.trim());
+      formData.append("author", author.trim());
+      formData.append("category", category);
+      formData.append("description", description.trim());
+      formData.append("copies", numCopies.toString());
+      formData.append("userName", user?.name || "Anonymous Reader");
+      formData.append("userEmail", user?.email || "");
+
+      if (uploadMode === "file" && selectedFile) {
+        formData.append("image", selectedFile);
+      } else {
+        formData.append("image", image.trim());
+      }
+
       const response = await apiFetch<any>("/books", {
         method: "POST",
-        body: JSON.stringify({
-          title: title.trim(),
-          author: author.trim(),
-          category,
-          image: image.trim(),
-          description: description.trim(),
-          copies: numCopies,
-          userName: user?.name || "Anonymous Reader",
-          userEmail: user?.email,
-        }),
+        body: formData,
       });
 
       if (response.error) {
@@ -263,39 +337,156 @@ export default function AddBookPage() {
               </div>
             </div>
 
-            {/* 3. Book Cover Image URL */}
+            {/* 3. Book Cover Image Selection & Upload */}
             <div>
-              <label className="block text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                Book Cover Image URL (ImgBB, PostImage, or Unsplash) *
-              </label>
-              <div className="relative">
-                <ImageIcon className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
-                <input
-                  type="url"
-                  value={image}
-                  onChange={(e) => setImage(e.target.value)}
-                  placeholder="https://i.ibb.co/example/book-cover.jpg"
-                  required
-                  disabled={isLoading}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-                />
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                  Book Cover Image *
+                </label>
+                {/* Mode Selector Toggle */}
+                <div className="flex items-center gap-1 p-0.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUploadMode("file");
+                      setFormError(null);
+                    }}
+                    className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                      uploadMode === "file"
+                        ? "bg-white dark:bg-zinc-700 text-emerald-600 dark:text-emerald-400 shadow-xs font-semibold"
+                        : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                    }`}
+                  >
+                    Upload File
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUploadMode("url");
+                      setFormError(null);
+                    }}
+                    className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                      uploadMode === "url"
+                        ? "bg-white dark:bg-zinc-700 text-emerald-600 dark:text-emerald-400 shadow-xs font-semibold"
+                        : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                    }`}
+                  >
+                    Image URL
+                  </button>
+                </div>
               </div>
 
-              {/* Cover Preview */}
-              {image.trim().startsWith("http") && (
-                <div className="mt-3 flex items-center gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/60">
-                  <div className="relative w-12 h-16 rounded overflow-hidden bg-zinc-200 flex-shrink-0">
-                    <Image
-                      src={image}
-                      alt="Cover Preview"
-                      fill
-                      className="object-cover"
-                      onError={() => {}}
+              {uploadMode === "file" ? (
+                /* File Upload Area */
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleFileChange}
+                    disabled={isLoading}
+                    className="hidden"
+                    id="book-cover-file"
+                  />
+
+                  {!selectedFile ? (
+                    /* Dropzone / Upload Button when no file is selected */
+                    <label
+                      htmlFor="book-cover-file"
+                      className="group flex flex-col items-center justify-center w-full p-6 sm:p-8 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-emerald-500 dark:hover:border-emerald-500 bg-zinc-50 dark:bg-zinc-800/40 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 transition-all cursor-pointer"
+                    >
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                        <Upload className="w-6 h-6" />
+                      </div>
+                      <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        Choose a Book Cover Image
+                      </span>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        Select a JPEG, PNG, or WebP image from your device (Max 5MB)
+                      </p>
+                      <span className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-emerald-600 dark:text-emerald-400 shadow-2xs group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                        Browse Computer
+                      </span>
+                    </label>
+                  ) : (
+                    /* Selected File Details & Instant Preview */
+                    <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div className="flex items-center gap-4 w-full sm:w-auto">
+                        {previewUrl && (
+                          <div className="relative w-16 h-22 rounded-xl overflow-hidden bg-zinc-200 dark:bg-zinc-700 flex-shrink-0 shadow-sm border border-zinc-200 dark:border-zinc-700">
+                            {/* Standard img tag for local blob URLs */}
+                            <img
+                              src={previewUrl}
+                              alt="Book cover preview"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                            {selectedFile.name}
+                          </p>
+                          <p className="text-xs text-zinc-500 mt-0.5">
+                            {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB &bull; {selectedFile.type || "Image"}
+                          </p>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 mt-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Ready to upload to ImgBB</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isLoading}
+                          className="px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer"
+                        >
+                          Replace
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRemoveFile}
+                          disabled={isLoading}
+                          className="p-1.5 rounded-lg border border-red-200 dark:border-red-800/60 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 cursor-pointer"
+                          title="Remove image"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Fallback Manual URL Input */
+                <div>
+                  <div className="relative">
+                    <ImageIcon className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                    <input
+                      type="url"
+                      value={image}
+                      onChange={(e) => setImage(e.target.value)}
+                      placeholder="https://i.ibb.co/example/book-cover.jpg"
+                      required={uploadMode === "url"}
+                      disabled={isLoading}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                     />
                   </div>
-                  <span className="text-xs text-zinc-500 truncate">
-                    Image preview loaded successfully.
-                  </span>
+                  {image.trim().startsWith("http") && (
+                    <div className="mt-3 flex items-center gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/60">
+                      <div className="relative w-12 h-16 rounded overflow-hidden bg-zinc-200 flex-shrink-0">
+                        <img
+                          src={image}
+                          alt="Cover Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <span className="text-xs text-zinc-500 truncate">
+                        Image URL preview loaded successfully.
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -362,7 +553,7 @@ export default function AddBookPage() {
                 {isLoading ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Adding Book to Library...</span>
+                    <span>Adding Book & Uploading Cover...</span>
                   </>
                 ) : (
                   <>

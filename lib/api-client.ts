@@ -14,6 +14,7 @@ export async function getBackendJwt(): Promise<string | null> {
   if (typeof window === "undefined") {
     return null;
   }
+  
 
   // 1. Return cached in-memory or localStorage token if present
   if (inMemoryJwt) {
@@ -85,10 +86,18 @@ export async function apiFetch<T = unknown>(
       ? endpoint
       : `${API_BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
 
+    const isFormData =
+      typeof FormData !== "undefined" && options.body instanceof FormData;
+
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(options.headers as Record<string, string>),
     };
+
+    if (isFormData) {
+      delete headers["Content-Type"];
+      delete headers["content-type"];
+    }
 
     // Attach JWT if available
     const token = await getBackendJwt();
